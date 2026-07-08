@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Insight Hub & Dashboard</title>
+    
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        
+
+        <header class="app-header">
+            <div class="header-logo">
+                <div class="logo-icon">
+                    <i data-lucide="cpu" class="icon-pulse"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>DIRS</h1>
+                    <span>PDF Insights</span>
+                </div>
+            </div>
+            
+            <div class="header-actions">
+               
+                <div class="api-key-container">
+                    <div class="api-key-status" id="apiKeyStatus">
+                        <span class="status-indicator error"></span>
+                        <span class="status-text">API Key Missing</span>
+                    </div>
+                    <button class="btn btn-secondary btn-icon" id="btnConfigApiKey" title="Configure API Key">
+                        <i data-lucide="key"></i>
+                        <span>Configure API Key</span>
+                    </button>
+                </div>
+                
+                
+                <button class="theme-toggle" id="themeToggleBtn" aria-label="Toggle Theme">
+                    <i data-lucide="sun" id="sunIcon"></i>
+                    <i data-lucide="moon" id="moonIcon" class="hidden"></i>
+                </button>
+            </div>
+        </header>
+        <div class="main-layout">
+            
+         
+            <aside class="app-sidebar">
+                <div class="sidebar-section">
+                    <h2 class="section-title">
+                        <i data-lucide="files"></i> Documents
+                        <span class="badge" id="fileCountBadge">0/10</span>
+                    </h2>
+                    
+                   
+                    <div class="upload-zone" id="dropZone">
+                        <input type="file" id="fileInput" multiple accept=".pdf" class="hidden-input">
+                        <div class="upload-icon-wrapper">
+                            <i data-lucide="upload-cloud"></i>
+                        </div>
+                        <h3>Upload Documents</h3>
+                        <p>Drag & drop PDFs here or <span class="browse-link">browse</span></p>
+                        <span class="upload-limit">Max 10 files</span>
+                    </div>
+                </div>
+                <div class="sidebar-section flex-grow">
+                    <h3 class="subsection-title">Uploaded Files</h3>
+                    <div class="file-list" id="fileListContainer">
+                    
+                        <div class="file-empty-state" id="fileEmptyState">
+                            <i data-lucide="file-text"></i>
+                            <p>No documents uploaded yet</p>
+                        </div>
+                    </div>
+                </div>
+                
+              
+                <div class="sidebar-footer">
+                    <button class="btn btn-danger btn-full" id="btnClearAll" disabled>
+                        <i data-lucide="trash-2"></i>
+                        <span>Clear All Documents</span>
+                    </button>
+                </div>
+            </aside>
+           
+            <main class="content-panel">
+               
+                <nav class="content-tabs">
+                    <button class="tab-link active" id="tabBtnSummary" data-tab="summary">
+                        <i data-lucide="align-left"></i>
+                        <span>Executive Summary</span>
+                    </button>
+                    <button class="tab-link" id="tabBtnDashboard" data-tab="dashboard">
+                        <i data-lucide="bar-chart-3"></i>
+                        <span>Insights Dashboard</span>
+                    </button>
+                    <button class="tab-link" id="tabBtnChat" data-tab="chat">
+                        <i data-lucide="message-square"></i>
+                        <span>AI Chat Companion</span>
+                    </button>
+                </nav>
+           
+                <div class="tab-viewport">
+                    
+                  
+                    <section class="tab-panel active" id="panelSummary">
+                        <div class="panel-header">
+                            <h2>Executive Summary</h2>
+                            <button class="btn btn-secondary btn-icon" id="btnRefreshSummary" disabled>
+                                <i data-lucide="refresh-cw"></i>
+                                <span>Regenerate Summary</span>
+                            </button>
+                        </div>
+                        
+                        <div class="panel-body">
+                      
+                            <div class="interactive-state" id="summaryState">
+                                <div class="state-illustration">
+                                    <i data-lucide="sparkles" class="icon-glow"></i>
+                                </div>
+                                <h3>Generate Insights</h3>
+                                <p>Upload one or more PDF files in the sidebar, and we will analyze them to construct a full executive summary.</p>
+                            </div>
+                            
+                            
+                            <div class="markdown-body hidden" id="summaryContentContainer">
+                                <div class="glass-card summary-card" id="summaryTextContent">
+                              
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                  
+                    <section class="tab-panel" id="panelDashboard">
+                        <div class="panel-header">
+                            <h2>Insights Dashboard</h2>
+                        </div>
+                        
+                        <div class="panel-body">
+                       
+                            <div class="interactive-state" id="dashboardState">
+                                <div class="state-illustration">
+                                    <i data-lucide="bar-chart-2" class="icon-glow"></i>
+                                </div>
+                                <h3>Interactive Visualizations</h3>
+                                <p>Once documents are uploaded, we will parse structured data and render interactive charts showing key topics, sentiment, and metrics.</p>
+                            </div>
+                            
+                            <div class="dashboard-grid hidden" id="dashboardContentContainer">
+                                
+                               
+                                <div class="stats-row">
+                                    <div class="glass-card stat-card">
+                                        <div class="stat-icon info">
+                                            <i data-lucide="layers"></i>
+                                        </div>
+                                        <div class="stat-data">
+                                            <span class="stat-value" id="statTotalPages">0</span>
+                                            <span class="stat-label">Total Pages Analyzed</span>
+                                        </div>
+                                    </div>
+                                    <div class="glass-card stat-card">
+                                        <div class="stat-icon success">
+                                            <i data-lucide="text-quote"></i>
+                                        </div>
+                                        <div class="stat-data">
+                                            <span class="stat-value" id="statWordCount">0</span>
+                                            <span class="stat-label">Words Extracted</span>
+                                        </div>
+                                    </div>
+                                    <div class="glass-card stat-card">
+                                        <div class="stat-icon warning">
+                                            <i data-lucide="shield-alert"></i>
+                                        </div>
+                                        <div class="stat-data">
+                                            <span class="stat-value" id="statRiskCount">0</span>
+                                            <span class="stat-label">Risks & Issues Flagged</span>
+                                        </div>
+                                    </div>
+                                    <div class="glass-card stat-card">
+                                        <div class="stat-icon primary">
+                                            <i data-lucide="smile"></i>
+                                        </div>
+                                        <div class="stat-data">
+                                            <span class="stat-value" id="statSentiment">Neutral</span>
+                                            <span class="stat-label">Overall Sentiment</span>
+                                        </div>
+                                    </div>
+                                </div>
+                               
+                                <div class="charts-row">
+                                    <div class="glass-card chart-card flex-2">
+                                        <h3>Key Topics & Relevance</h3>
+                                        <div class="chart-container">
+                                            <canvas id="topicsChart"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="glass-card chart-card flex-1">
+                                        <h3>Sentiment Breakdown</h3>
+                                        <div class="chart-container">
+                                            <canvas id="sentimentChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                
+                                <div class="dashboard-row">
+                                    <div class="glass-card detail-card">
+                                        <h3>Major Takeaways & Next Steps</h3>
+                                        <ul class="takeaways-list" id="takeawaysListContainer">
+                                          
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <section class="tab-panel" id="panelChat">
+                        <div class="panel-header">
+                            <h2>AI Chat Companion</h2>
+                            <span class="chat-subtitle" id="chatDocSubtitle">No documents selected</span>
+                        </div>
+                        
+                        <div class="panel-body chat-panel-body">
+                            
+                            <div class="chat-messages" id="chatMessagesContainer">
+                                
+                                <div class="chat-message assistant">
+                                    <div class="message-avatar">
+                                        <i data-lucide="bot"></i>
+                                    </div>
+                                    <div class="message-bubble-wrapper">
+                                        <div class="message-bubble">
+                                            <p>Hello! I am your DIRS AI document companion. Once you upload software solution files or PDFs, I will be ready to answer questions, dig into complex details, and extract specific metrics for you.</p>
+                                        </div>
+                                        <span class="message-time">Just now</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            
+                            <div class="chat-suggestions" id="chatSuggestionsContainer">
+                                <span class="suggestion-title">Ask about the data:</span>
+                                <div class="suggestions-list">
+                                    <button class="chip" data-query="Can you summarize the core technical requirements from the uploaded documents?">Summarize requirements</button>
+                                    <button class="chip" data-query="What are the main architectural risks or technical debt items mentioned?">Identify software risks</button>
+                                    <button class="chip" data-query="Provide a bulleted list of all deadlines, deliverables, and milestones.">Find deliverables</button>
+                                </div>
+                            </div>
+                         
+                            <form class="chat-input-form" id="chatForm">
+                                <textarea 
+                                    id="chatInput" 
+                                    placeholder="Ask a question about the uploaded PDFs..." 
+                                    rows="1" 
+                                    required
+                                    disabled
+                                ></textarea>
+                                <button type="submit" class="btn btn-primary btn-round" id="btnSendChat" disabled>
+                                    <i data-lucide="send"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <div class="modal-overlay hidden" id="apiKeyModal">
+        <div class="glass-card modal-card">
+            <div class="modal-header">
+                <h3>Configure Gemini API Key</h3>
+                <button class="modal-close" id="btnModalClose">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>DIRS runs securely on your machine. To power the dashboard summaries, automated charts, and chat assistant, you can connect your Gemini API Key.</p>
+                
+                <div class="alert-box info-alert">
+                    <i data-lucide="info"></i>
+                    <div>
+                        <strong>Do not have an API Key?</strong> You can get a free one instantly from the <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">Google AI Studio <i data-lucide="external-link" class="inline-icon"></i></a>.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="apiKeyInput">Gemini API Key</label>
+                    <div class="input-wrapper">
+                        <i data-lucide="key" class="input-icon"></i>
+                        <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
+                        <button type="button" class="btn-toggle-password" id="btnTogglePassword" title="Show/Hide Key">
+                            <i data-lucide="eye"></i>
+                        </button>
+                    </div>
+                    <span class="help-text">Your API key is only stored in your browser session and is never sent anywhere except directly to your local FastAPI server.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnCancelApiKey">Cancel</button>
+                <button class="btn btn-primary" id="btnSaveApiKey">Save API Key</button>
+            </div>
+        </div>
+    </div>
+   
+    <script src="app.js"></script>
+</body>
+</html>
