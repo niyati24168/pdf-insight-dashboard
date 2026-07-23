@@ -13,6 +13,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("pdf=insight-hub")
 app= FastAPI(title= "PDF Insight Hub Server")
 documents_store: Dict[str, Dict[str, Any]] = {}
+CACHE_DIR = os.environ.get("CACHE_DIR", "document_cache")
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 class DashboardStats(BaseModel): 
     pageCount: int= Field(description= "Total pages of all uploaded documents combined")
@@ -84,6 +86,7 @@ async def upload_document(file: UploadFile= File(...)):
             "words": word_count,
             "size": len(contents)
         }
+        save_to_cache(file.filename, text, page_count, word_count)
 
         logger.info(f"Processed PDF: {file.filename} ({page_count} pages)")
         return {
@@ -98,6 +101,9 @@ async def upload_document(file: UploadFile= File(...)):
 @app.post("/api/clear")
 async def clear_documents():
     documents_store.clear()
+    for entry in os.listdir(CACHE_DIR):
+        if entry.endswith(".txt") or entry.endswith(".meta"):
+            os.remove(os.path.join(CACHE_DIR, entry))
     logger.info("Cleared document store")
     return {"status": "cleared"}
 
@@ -195,12 +201,89 @@ async def get_static_file(filename: str):
         return FileResponse(file_path)
     return HTMLResponse(status_code=404, content="File not found")
 
-#@app.get("/")
-#async def read_index():
-#    return FileResponse("static/index.html")
+from fastapi.responses import StreamingResponse
 
-#if __name__=="__main__":
-#    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
+
+def save_to_cache(filename: str, text: str, pages: int, words: int):
+    meta_path = os.path.join(CACHE_DIR, f"{filename}.meta")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        f.write(f"{pages},{words}")
+
+    text_path = os.path.join(CACHE_DIR, f"{filename}.txt")
+    with open(text_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def load_cache():
+    if not os.path.exists(CACHE_DIR):
+        return
+
+    for file_name in os.listdir(CACHE_DIR):
+        if not file_name.endswith(".txt"):
+            continue
+
+        filename = file_name[:-4]
+        meta_path = os.path.join(CACHE_DIR, f"{filename}.meta")
+        if not os.path.exists(meta_path):
+            continue
+
+        with open(meta_path, "r", encoding="utf-8") as f:
+            pages, words = map(int, f.read().split(","))
+
+        with open(os.path.join(CACHE_DIR, file_name), "r", encoding="utf-8") as f:
+            text = f.read()
+
+        documents_store[filename] = {"text": text, "pages": pages, "words": words}
+
+
+load_cache()
+
+@app.post("/api/chat/stream")
+async def chat_stream(payload: ChatPlayload, x_gemini_api_key: Optional[str] = Header(None)):
+    if not documents_store:
+        raise HTTPException(status_code=400, detail="Please upload files first.")
+        
+    client = get_gemini_client(x_gemini_api_key)
+    
+    full_text = "\n\n".join([f"File: {name}\n{doc['text']}" for name, doc in documents_store.items()])
+    system_instruction = f"""
+    You are DIRS AI, an expert technical document assistant.
+    Answer questions based ONLY on this context:
+    {full_text}
+    """
+    
+    contents = []
+    for msg in payload.history:
+        role = "user" if msg.role == "user" else "model"
+        contents.append({
+            "role": role,
+            "parts": [{"text": msg.content}]
+        })
+    contents.append({
+        "role": "user",
+        "parts": [{"text": payload.message}]
+    })
+    
+    try:
+        from google.genai import types
+        response_stream = client.models.generate_content_stream(
+            model='gemini-2.5-flash',
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                temperature=0.4
+            )
+        )
+        
+        def event_generator():
+            for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+
+        return StreamingResponse(event_generator(), media_type="text/plain")
+    except Exception as e:
+        logger.error(f"Stream Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI Chat Stream Error: {str(e)}")
 
 @app.get("/")
 async def read_index():
@@ -209,13 +292,8 @@ async def read_index():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return HTMLResponse(status_code=404, content="static/index.html not found.")
-# Start server script
+
 if __name__ == "__main__":
-    # In production (e.g. Render), the server assigns a dynamic port via environment variable.
-    # On your local machine, it defaults to 8000.
     port = int(os.environ.get("PORT", 8000))
-    # We listen on 0.0.0.0 in production to accept public web requests.
-    # We only enable reload (auto-restart) in development mode.
     is_dev = "PORT" not in os.environ
     uvicorn.run("app:app", host="0.0.0.0", port=port, reload=is_dev)
-

@@ -7,7 +7,9 @@ const state = {
         topics: null,
         sentiment: null
     },
-    isAnalyzing: false
+    isAnalyzing: false,
+    chatInFlight: false,
+    chatQueue: []
 };
 
 const DOM = {
@@ -578,22 +580,45 @@ function initChat() {
         });
     });
 }
-async function submitChatQuery(query) {
-    
-    appendChatMessage('user', query);
+
+async function submitChatQuery(query, isQueued = false) {
+    if (!query) return;
+
+    if (state.chatInFlight) {
+        state.chatQueue.push(query);
+        return;
+    }
+
+    state.chatInFlight = true;
+    if (!isQueued) {
+        appendChatMessage('user', query);
+    }
+
     DOM.chatInput.value = '';
     DOM.chatInput.style.height = 'auto';
-    DOM.chatInput.disabled = true;
-    DOM.btnSendChat.disabled = true;
-    
-    
     DOM.chatSuggestionsContainer.classList.add('hidden');
-    
-    const typingBubbleId = appendChatTypingIndicator();
+
+    const requestId = 'req_' + Math.random().toString(36).substring(2, 9);
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const responseCard = document.createElement('div');
+    responseCard.className = 'chat-message assistant';
+    responseCard.innerHTML = `
+        <div class="message-avatar"><i data-lucide="bot"></i></div>
+        <div class="message-bubble-wrapper">
+            <div class="message-bubble" id="stream_${requestId}">
+                <div class="typing-dots"><span></span><span></span><span></span></div>
+            </div>
+            <span class="message-time">${timeStr}</span>
+        </div>
+    `;
+    DOM.chatMessagesContainer.appendChild(responseCard);
+    lucide.createIcons();
     scrollToChatBottom();
-    
+
+    const streamBubble = document.getElementById(`stream_${requestId}`);
+
     try {
-        const response = await fetch('/api/chat', {
+        const response = await fetch('/api/chat/stream', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -604,30 +629,47 @@ async function submitChatQuery(query) {
                 history: state.chatHistory
             })
         });
-        const data = await response.json();
-        
-        
-        removeChatTypingIndicator(typingBubbleId);
-        if (response.ok) {
-            appendChatMessage('assistant', data.answer);
-            
-            
-            state.chatHistory.push({ role: 'user', content: query });
-            state.chatHistory.push({ role: 'assistant', content: data.answer });
-        } else {
-            appendChatMessage('assistant', `⚠️ **Error:** ${data.detail || 'Could not process query.'}`);
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            streamBubble.innerHTML = `⚠️ **Error:** ${errData.detail || 'Could not initiate stream.'}`;
+            return;
         }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+            throw new Error('Streaming response is not available');
+        }
+
+        const decoder = new TextDecoder();
+        let botResponse = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            botResponse += chunk;
+            streamBubble.innerHTML = marked.parse(botResponse);
+            scrollToChatBottom();
+        }
+
+        state.chatHistory.push({ role: 'user', content: query });
+        state.chatHistory.push({ role: 'assistant', content: botResponse });
     } catch (err) {
-        console.error('Chat API error:', err);
-        removeChatTypingIndicator(typingBubbleId);
-        appendChatMessage('assistant', '⚠️ **Connection Error:** Lost touch with the server.');
+        console.error('Streaming error:', err);
+        streamBubble.innerHTML = '⚠️ **Connection Error:** Lost touch with the server.';
     } finally {
-        DOM.chatInput.disabled = false;
-        DOM.btnSendChat.disabled = false;
+        state.chatInFlight = false;
         DOM.chatInput.focus();
-        scrollToChatBottom();
+        if (state.chatQueue.length > 0) {
+            const nextQuery = state.chatQueue.shift();
+            submitChatQuery(nextQuery, true);
+        }
     }
 }
+
+
 function appendChatMessage(role, text) {
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageCard = document.createElement('div');
@@ -657,33 +699,6 @@ function appendChatMessage(role, text) {
     }
     
     scrollToChatBottom();
-}
-function appendChatTypingIndicator() {
-    const uniqueId = 'typing_' + Date.now();
-    const typingCard = document.createElement('div');
-    typingCard.className = 'chat-message assistant';
-    typingCard.id = uniqueId;
-    typingCard.innerHTML = `
-        <div class="message-avatar">
-            <i data-lucide="bot"></i>
-        </div>
-        <div class="message-bubble-wrapper">
-            <div class="message-bubble">
-                <div class="typing-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-            </div>
-        </div>
-    `;
-    DOM.chatMessagesContainer.appendChild(typingCard);
-    lucide.createIcons();
-    return uniqueId;
-}
-function removeChatTypingIndicator(id) {
-    const element = document.getElementById(id);
-    if (element) element.remove();
 }
 function scrollToChatBottom() {
     DOM.chatMessagesContainer.scrollTop = DOM.chatMessagesContainer.scrollHeight;
